@@ -4,5 +4,9 @@
 ![screenshot](https://raw.githubusercontent.com/RFKiller/mass-deauth/master/screenshot-v1-01.png)
 ![screenshot](https://raw.githubusercontent.com/RFKiller/mass-deauth/master/screenshot-v1-02.png)
 
+This next screenshot shows a runtime of over 16 minutes before I intentionally killed the script; as you can see there were no errors which stopped it.
+
+![screenshot] (https://raw.githubusercontent.com/RFKiller/mass-deauth/master/screenshot-v1-03.png
+
 [1]: https://github.com/RFKiller/mass-deauth/issues
 [2]: https://github.com/RFKiller/mass-deauth/pulls
